@@ -6,8 +6,6 @@
     flake-utils.url = "github:numtide/flake-utils";
     reaper-flake.url = "github:FastTrackStudios/reaper-flake";
     crane.url = "github:ipetkov/crane";
-    wrappers.url = "github:Lassulus/wrappers";
-
     # daw source only — not evaluated as a flake to avoid circular dependency
     # (daw uses fts-reaper-flake; we only need it to build reaper-launcher).
     daw = {
@@ -32,7 +30,6 @@
       flake-utils,
       reaper-flake,
       crane,
-      wrappers,
       daw,
     } @ inputs:
     let
@@ -132,8 +129,6 @@
           };
         };
 
-        wlib = wrappers.lib;
-
         # ── reaper-launcher ───────────────────────────────────────────────
         craneLib = crane.mkLib pkgs;
 
@@ -152,29 +147,35 @@
           in
           craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
 
-        # ── Per-rig wrapper scripts ────────────────────────────────────────
-        # Each rig gets its own binary (fts-keys, fts-drums, etc.) that calls
-        # reaper-launcher with the rig's launch.json path.
-        # $HOME in args is preserved unescaped by escapeShellArgWithEnv —
-        # the shell expands it at runtime.
-        mkRigWrapper =
-          rig:
-          wlib.wrapPackage {
-            inherit pkgs;
-            package = reaper-launcher;
-            exePath = "${reaper-launcher}/bin/reaper-launcher";
-            binName = rig.id;
-            args = [
-              "--config"
-              "$HOME/.config/fts/rigs/${rig.id}/launch.json"
-              "$@"
-            ];
-          };
+        # ── Per-rig self-contained wrappers ────────────────────────────────
+        # Each rig is a standalone script that generates its own launch.json
+        # at runtime (expanding $HOME), then execs reaper-launcher.
+        # No home-manager or setup step required — nix run .#fts-keys just works.
+        mkRigWrapper = rig: pkgs.writeShellScriptBin rig.id ''
+          set -euo pipefail
+          CONFIG_DIR="$HOME/.config/fts/rigs/${rig.id}"
+          CONFIG="$CONFIG_DIR/launch.json"
+          mkdir -p "$CONFIG_DIR"
+          cat > "$CONFIG" << 'EOF'
+          {
+            "role": "signal",
+            "rig_type": "${rig.rig_type}",
+            "reaper_executable": "${prodPkgs.reaper}/bin/reaper",
+            "resources_dir": "PLACEHOLDER_HOME/.fasttrackstudio/Reaper",
+            "ini_path": "PLACEHOLDER_HOME/.fasttrackstudio/Reaper/reaper.ini",
+            "ini_overrides": { "undo_max_mem": 0 },
+            "restore_ini_after_launch": false,
+            "reaper_args": ["-newinst", "-nosplash", "-ignoreerrors"]
+          }
+          EOF
+          ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
+          exec "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@"
+        '';
 
-        # Single package containing all rig wrappers
+        # Single package containing all rig wrappers + reaper-launcher
         fts-rigs = pkgs.symlinkJoin {
           name = "fts-rigs";
-          paths = nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs;
+          paths = (nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs) ++ [ reaper-launcher ];
         };
 
         # ── Audio production library set ──────────────────────────────────
@@ -381,7 +382,7 @@
       in
       {
         packages = {
-          default = setup-script;
+          default = fts-rigs;
           inherit
             reaper-launcher
             fts-rigs
@@ -390,7 +391,8 @@
           fts-gui = devPkgs.fts-gui;
           reaper-fhs = devPkgs.reaper-fhs;
           setup = setup-script;
-        };
+        }
+        // nixpkgs.lib.mapAttrs' (_: rig: nixpkgs.lib.nameValuePair rig.id (mkRigWrapper rig)) predefinedRigs;
 
         apps = {
           default = {
@@ -401,7 +403,11 @@
             type = "app";
             program = "${setup-script}/bin/fts-setup";
           };
-        };
+        }
+        // nixpkgs.lib.mapAttrs' (_: rig: nixpkgs.lib.nameValuePair rig.id {
+          type = "app";
+          program = "${mkRigWrapper rig}/bin/${rig.id}";
+        }) predefinedRigs;
 
         devShells.default = pkgs.mkShell {
           packages =
