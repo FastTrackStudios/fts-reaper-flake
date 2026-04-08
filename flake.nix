@@ -249,6 +249,8 @@
           Terminal=false
           DESKTOP
             chmod +x "$FTS_REAPER/${rig.name}.desktop"
+            # Set custom icon metadata for Nautilus/GNOME
+            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
 
             touch "$RIG_DIR/.setup-done"
           }
