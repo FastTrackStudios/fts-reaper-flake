@@ -234,7 +234,7 @@
           Icon=${rig.id}
           Terminal=false
           Categories=AudioVideo;Audio;
-          StartupWMClass=REAPER
+          StartupWMClass=${rig.id}
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           EOF
             ''

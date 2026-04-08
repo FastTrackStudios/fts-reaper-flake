@@ -177,11 +177,11 @@
     "daw": {
       "flake": false,
       "locked": {
-        "lastModified": 1775636738,
-        "narHash": "sha256-YEyTbQnwLjBWTmsP2LRJ2bwmjAkJEn1s96ZX3grWEGk=",
+        "lastModified": 1775640805,
+        "narHash": "sha256-q6u9I69Ykl99XNwaRK3XwhFryVgl5rRg0wFGNfOtk9U=",
         "owner": "FastTrackStudios",
         "repo": "daw",
-        "rev": "8bf4ea7ba9d09ce2b4f11e0f845c44d92a20fd85",
+        "rev": "3aa3bfefe2bd8c5970cd373e9bd6e186ad6f7b25",
         "type": "github"
       },
       "original": {
