@@ -238,14 +238,6 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            # Launcher script in Reaper folder (works in both Dolphin and Nautilus)
-            cat > "$FTS_REAPER/${rig.name}" << LAUNCHER
-          #!/usr/bin/env bash
-          exec ${rig.id} "\$@"
-          LAUNCHER
-            chmod +x "$FTS_REAPER/${rig.name}"
-            gio set "$FTS_REAPER/${rig.name}" metadata::custom-icon \
-              "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
           '') predefinedRigs)}
 
           echo "FTS REAPER setup complete"
