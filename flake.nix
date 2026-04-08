@@ -210,7 +210,25 @@
             "${fts-setup-standalone}/bin/fts-setup"
           fi
 
-          exec "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@"
+          # Launch REAPER in background, then tag its XWayland window with
+          # _KDE_NET_WM_DESKTOP_FILE so KDE shows the correct per-rig icon.
+          "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
+          REAPER_PID=$!
+
+          # Wait for REAPER's window to appear (up to 10s)
+          for i in $(seq 1 20); do
+            WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
+            sleep 0.5
+          done
+
+          # Tag the window so KDE matches it to our .desktop file
+          if [ -n "''${WID:-}" ]; then
+            ${pkgs.xorg.xprop}/bin/xprop -id "$WID" -f _KDE_NET_WM_DESKTOP_FILE 8u \
+              -set _KDE_NET_WM_DESKTOP_FILE "${rig.id}" 2>/dev/null || true
+          fi
+
+          # Wait for REAPER to exit
+          wait "$REAPER_PID" 2>/dev/null || true
         '';
 
         # Icons + desktop entries as a proper Nix package
