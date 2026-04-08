@@ -238,7 +238,7 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            # Desktop shortcut in Reaper folder (Dolphin shows Icon= and runs Exec=)
+            # Desktop shortcut in Reaper folder (works in Dolphin + Nautilus)
             cat > "$FTS_REAPER/${rig.name}.desktop" << DESKTOP
           [Desktop Entry]
           Type=Application
@@ -248,6 +248,7 @@
           Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
           Terminal=false
           DESKTOP
+            chmod +x "$FTS_REAPER/${rig.name}.desktop"
 
             touch "$RIG_DIR/.setup-done"
           }
