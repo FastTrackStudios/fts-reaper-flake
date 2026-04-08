@@ -5,6 +5,14 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     reaper-flake.url = "github:FastTrackStudios/reaper-flake";
+    crane.url = "github:ipetkov/crane";
+
+    # daw source only — not evaluated as a flake to avoid circular dependency
+    # (daw uses fts-reaper-flake; we only need it to build reaper-launcher).
+    daw = {
+      url = "github:FastTrackStudios/daw";
+      flake = false;
+    };
   };
 
   nixConfig = {
@@ -22,6 +30,8 @@
       nixpkgs,
       flake-utils,
       reaper-flake,
+      crane,
+      daw,
     } @ inputs:
     let
       # ── mkFtsPackages ─────────────────────────────────────────────────────
@@ -41,7 +51,7 @@
       # Re-export reaper-flake presets so consumers can reference them directly.
       presets = reaper-flake.presets;
 
-      ftsReaperConfig = "$HOME/.config/FastTrackStudio/Reaper";
+      ftsReaperConfig = "$HOME/.fasttrackstudio/Reaper";
     in
     {
       inherit presets;
@@ -70,6 +80,27 @@
             reaper.configDir = ftsReaperConfig;
           };
         };
+
+        # ── reaper-launcher ───────────────────────────────────────────────
+        # Builds just the reaper-launcher binary from the daw workspace source.
+        # reaper-launcher only depends on libc, serde, serde_json — pure Rust,
+        # no native deps — so this builds cleanly without the rest of the workspace.
+        craneLib = crane.mkLib pkgs;
+
+        reaper-launcher =
+          let
+            src = craneLib.cleanCargoSource daw;
+            commonArgs = {
+              inherit src;
+              pname = "reaper-launcher";
+              version = "0.1.0";
+              cargoExtraArgs = "-p reaper-launcher";
+              strictDeps = true;
+              doCheck = false;
+            };
+            cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          in
+          craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
 
         # ── Audio production library set ──────────────────────────────────
         # Full set of native libs needed for CLAP/VST plugins and DAW tools.
@@ -133,6 +164,7 @@
           fts-test = devPkgs.fts-test;
           fts-gui = devPkgs.fts-gui;
           reaper-fhs = devPkgs.reaper-fhs;
+          inherit reaper-launcher;
         };
 
         devShells.default = pkgs.mkShell {
@@ -141,6 +173,7 @@
               devPkgs.fts-test
               devPkgs.fts-gui
               devPkgs.reaper-fhs
+              reaper-launcher
               pkgs.pkg-config
               pkgs.openssl
             ]
@@ -159,12 +192,13 @@
           ];
 
           shellHook = ''
-            export FTS_REAPER_CONFIG="$HOME/.config/FastTrackStudio/Reaper"
+            export FTS_REAPER_CONFIG="$HOME/.fasttrackstudio/Reaper"
             echo ""
             echo "  fts-reaper-flake dev shell"
             echo "  ─────────────────────────────────────────"
             echo "  fts-test [cmd]  — headless REAPER FHS env"
             echo "  fts-gui         — launch REAPER with GUI"
+            echo "  reaper-launcher — rig launcher binary"
             echo ""
             echo "  REAPER: ${devPkgs.reaper}/bin/reaper"
             echo ""

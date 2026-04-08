@@ -69,7 +69,7 @@ let
 
   mkWrapperScript = rig: ''
     #!/usr/bin/env bash
-    exec "${config.home.homeDirectory}/.local/bin/reaper-launcher" \
+    exec "${cfg.launcherPackage}/bin/reaper-launcher" \
       --config "${config.home.homeDirectory}/.config/fts/rigs/${rig.id}/launch.json" \
       "$@"
   '';
@@ -116,6 +116,14 @@ in
       '';
     };
 
+    launcherPackage = lib.mkOption {
+      type = lib.types.package;
+      description = ''
+        The reaper-launcher binary package. Defaults to the one built from the
+        daw workspace in fts-reaper-flake. Override if you build it yourself.
+      '';
+    };
+
     configDir = lib.mkOption {
       type = lib.types.str;
       default = "${config.home.homeDirectory}/.fasttrackstudio/Reaper";
@@ -136,6 +144,9 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Make reaper-launcher available on PATH
+    home.packages = [ cfg.launcherPackage ];
+
     home.file = lib.mkMerge (
       lib.mapAttrsToList rigFiles enabledRigs
     );
