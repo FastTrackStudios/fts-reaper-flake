@@ -238,7 +238,7 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            cat > "$FTS_DIR/${rig.name}.desktop" << DESKTOP2
+            cat > "$FTS_REAPER/${rig.name}.desktop" << DESKTOP2
           [Desktop Entry]
           Type=Application
           Name=${rig.name}
@@ -247,8 +247,8 @@
           Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
           Terminal=false
           DESKTOP2
-            chmod +x "$FTS_DIR/${rig.name}.desktop"
-            gio set "$FTS_DIR/${rig.name}.desktop" metadata::custom-icon \
+            chmod +x "$FTS_REAPER/${rig.name}.desktop"
+            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon \
               "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
           '') predefinedRigs)}
 
