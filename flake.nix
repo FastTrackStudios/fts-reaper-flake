@@ -55,7 +55,7 @@
         keys = {
           id = "fts-keys";
           name = "FTS Keys";
-          comment = "REAPER signal rig for keyboard instruments";
+          comment = "REAPER Signal Rig for Keyboard Instruments";
           rig_type = "keys";
           badge = "KEYS";
           color = { r = 34; g = 197; b = 94; };    # 0x22c55e green
@@ -63,7 +63,7 @@
         drums = {
           id = "fts-drums";
           name = "FTS Drums";
-          comment = "REAPER signal rig for drums and percussion";
+          comment = "REAPER Signal Rig for Drums and Percussion";
           rig_type = "drums";
           badge = "DRUMS";
           color = { r = 239; g = 68; b = 68; };    # 0xef4444 red
@@ -71,7 +71,7 @@
         bass = {
           id = "fts-bass";
           name = "FTS Bass";
-          comment = "REAPER signal rig for bass";
+          comment = "REAPER Signal Rig for Bass";
           rig_type = "bass";
           badge = "BASS";
           color = { r = 234; g = 179; b = 8; };    # 0xeab308 yellow
@@ -79,7 +79,7 @@
         guitar = {
           id = "fts-guitar";
           name = "FTS Guitar";
-          comment = "REAPER signal rig for guitar";
+          comment = "REAPER Signal Rig for Guitar";
           rig_type = "guitar";
           badge = "GUITAR";
           color = { r = 59; g = 130; b = 246; };   # 0x3b82f6 blue
@@ -87,7 +87,7 @@
         vocals = {
           id = "fts-vocals";
           name = "FTS Vocals";
-          comment = "REAPER signal rig for vocals";
+          comment = "REAPER Signal Rig for Vocals";
           rig_type = "vocals";
           badge = "VOCALS";
           color = { r = 236; g = 72; b = 153; };   # 0xec4899 pink
@@ -243,6 +243,35 @@
           mkdir -p "$HOME/.config/fts/rigs"
           mkdir -p "$HOME/.local/bin"
           mkdir -p "$HOME/.local/share/applications"
+
+          # Ensure hicolor index.theme exists (required for KDE Plasma icon lookup)
+          HICOLOR="$HOME/.local/share/icons/hicolor"
+          mkdir -p "$HICOLOR"
+          if [ ! -f "$HICOLOR/index.theme" ]; then
+            cat > "$HICOLOR/index.theme" << 'THEME'
+          [Icon Theme]
+          Name=Hicolor
+          Comment=Fallback icon theme
+          Hidden=true
+          Directories=48x48/apps,128x128/apps,256x256/apps
+
+          [48x48/apps]
+          Size=48
+          Context=Apps
+          Type=Threshold
+
+          [128x128/apps]
+          Size=128
+          Context=Apps
+          Type=Threshold
+
+          [256x256/apps]
+          Size=256
+          Context=Apps
+          Type=Threshold
+          THEME
+            echo "  index.theme → $HICOLOR/index.theme"
+          fi
 
           # Seed a minimal reaper.ini if none exists
           if [ ! -f "$REAPER_CONFIG/reaper.ini" ]; then

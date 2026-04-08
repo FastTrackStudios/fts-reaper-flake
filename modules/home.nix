@@ -25,31 +25,31 @@ let
     keys = {
       id = "fts-keys";
       name = "FTS Keys";
-      comment = "REAPER signal rig for keyboard instruments";
+      comment = "REAPER Signal Rig for Keyboard Instruments";
       rig_type = "keys";
     };
     drums = {
       id = "fts-drums";
       name = "FTS Drums";
-      comment = "REAPER signal rig for drums and percussion";
+      comment = "REAPER Signal Rig for Drums and Percussion";
       rig_type = "drums";
     };
     bass = {
       id = "fts-bass";
       name = "FTS Bass";
-      comment = "REAPER signal rig for bass";
+      comment = "REAPER Signal Rig for Bass";
       rig_type = "bass";
     };
     guitar = {
       id = "fts-guitar";
       name = "FTS Guitar";
-      comment = "REAPER signal rig for guitar";
+      comment = "REAPER Signal Rig for Guitar";
       rig_type = "guitar";
     };
     vocals = {
       id = "fts-vocals";
       name = "FTS Vocals";
-      comment = "REAPER signal rig for vocals";
+      comment = "REAPER Signal Rig for Vocals";
       rig_type = "vocals";
     };
   };
