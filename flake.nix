@@ -238,17 +238,8 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            # Local shortcut in Reaper folder (uses absolute icon path)
-            cat > "$FTS_REAPER/${rig.id}.desktop" << DESKTOP
-          [Desktop Entry]
-          Type=Application
-          Name=${rig.name}
-          Comment=${rig.comment}
-          Exec=$SELF %F
-          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
-          Terminal=false
-          DESKTOP
-            chmod +x "$FTS_REAPER/${rig.id}.desktop"
+            # Symlink in Reaper folder for quick access from file manager
+            ln -sf "$SELF" "$FTS_REAPER/${rig.name}"
 
             touch "$RIG_DIR/.setup-done"
           }
