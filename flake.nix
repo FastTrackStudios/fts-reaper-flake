@@ -182,11 +182,27 @@
           EOF
           ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
 
-          # Install icons on first run (REAPER base + colored badge)
+          # Install icons + desktop entry on first run
           ICON_MARKER="$CONFIG_DIR/.icons-installed"
           if [ ! -f "$ICON_MARKER" ]; then
-            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}"${if rig.noTint or false then " --no-tint" else ""} 2>/dev/null \
-              && touch "$ICON_MARKER" || true
+            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}"${if rig.noTint or false then " --no-tint" else ""} 2>/dev/null || true
+
+            # Desktop entry
+            mkdir -p "$HOME/.local/share/applications"
+            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=${rig.name}
+          Comment=${rig.comment}
+          Exec=$(readlink -f "$0") %F
+          Icon=${rig.id}
+          Terminal=false
+          Categories=AudioVideo;Audio;
+          StartupWMClass=REAPER
+          Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
+          DESKTOP
+
+            touch "$ICON_MARKER"
           fi
 
           exec "$LAUNCHER" --config "$CONFIG" "$@"
