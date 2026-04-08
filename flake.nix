@@ -53,37 +53,47 @@
       ftsReaperConfig = "$HOME/.fasttrackstudio/Reaper";
 
       # ── Predefined rig definitions ─────────────────────────────────────
-      # Colors and badges match icon_gen::rig_appearance in reaper-launcher.
+      # Colors and badges must match icon_gen::rig_appearance in reaper-launcher.
       predefinedRigs = {
         keys = {
           id = "fts-keys";
           name = "FTS Keys";
           comment = "REAPER signal rig for keyboard instruments";
           rig_type = "keys";
+          badge = "KEYS";
+          color = { r = 34; g = 197; b = 94; };    # 0x22c55e green
         };
         drums = {
           id = "fts-drums";
           name = "FTS Drums";
           comment = "REAPER signal rig for drums and percussion";
           rig_type = "drums";
+          badge = "DRUMS";
+          color = { r = 239; g = 68; b = 68; };    # 0xef4444 red
         };
         bass = {
           id = "fts-bass";
           name = "FTS Bass";
           comment = "REAPER signal rig for bass";
           rig_type = "bass";
+          badge = "BASS";
+          color = { r = 234; g = 179; b = 8; };    # 0xeab308 yellow
         };
         guitar = {
           id = "fts-guitar";
           name = "FTS Guitar";
           comment = "REAPER signal rig for guitar";
           rig_type = "guitar";
+          badge = "GUITAR";
+          color = { r = 59; g = 130; b = 246; };   # 0x3b82f6 blue
         };
         vocals = {
           id = "fts-vocals";
           name = "FTS Vocals";
           comment = "REAPER signal rig for vocals";
           rig_type = "vocals";
+          badge = "VOCALS";
+          color = { r = 236; g = 72; b = 153; };   # 0xec4899 pink
         };
       };
     in
@@ -106,9 +116,18 @@
             ];
         };
 
+        # headless build — for CI/testing devShell
         devPkgs = mkFtsPackages {
           inherit pkgs;
           cfg = presets.dev // {
+            reaper.configDir = ftsReaperConfig;
+          };
+        };
+
+        # GUI build — for production signal rigs (headless.enable = false)
+        prodPkgs = mkFtsPackages {
+          inherit pkgs;
+          cfg = presets.full // {
             reaper.configDir = ftsReaperConfig;
           };
         };
@@ -200,17 +219,19 @@
 
         # ── Setup script ──────────────────────────────────────────────────
         # nix run .#setup — installs the full FTS audio production environment:
-        #   - creates ~/.fasttrackstudio/Reaper/
-        #   - writes launch.json for each predefined rig
+        #   - creates ~/.fasttrackstudio/Reaper/ with a seed reaper.ini
+        #   - writes launch.json for each rig (GUI REAPER, $HOME expanded)
+        #   - generates per-rig badge icons via awk + rsvg-convert
         #   - symlinks rig wrappers and reaper-launcher to ~/.local/bin/
-        #   - installs .desktop entries to ~/.local/share/applications/
+        #   - installs named .desktop entries to ~/.local/share/applications/
         setup-script = pkgs.writeShellScriptBin "fts-setup" ''
           set -euo pipefail
 
-          REAPER_EXE="${devPkgs.reaper}/bin/reaper"
+          REAPER_EXE="${prodPkgs.reaper}/bin/reaper"
           REAPER_CONFIG="$HOME/.fasttrackstudio/Reaper"
           LAUNCHER="${reaper-launcher}/bin/reaper-launcher"
           RIGS_PKG="${fts-rigs}"
+          RSVG="${pkgs.librsvg}/bin/rsvg-convert"
 
           echo ""
           echo "  FTS Audio Production Setup"
@@ -236,12 +257,57 @@
           ln -sf "$LAUNCHER" "$HOME/.local/bin/reaper-launcher"
           echo "  reaper-launcher → $HOME/.local/bin/reaper-launcher"
 
+          # Generate a badged icon at one size using awk (mirrors icon_gen::build_svg).
+          # Usage: gen_icon_svg <size> <r> <g> <b> <badge_text>
+          gen_icon_svg() {
+            local size=$1 r=$2 g=$3 b=$4 badge=$5
+            awk -v size="$size" -v r="$r" -v g="$g" -v b="$b" -v badge="$badge" '
+            BEGIN {
+              s = size + 0
+              margin       = s * 0.06
+              icon_size    = s - margin * 2
+              corner_r     = icon_size * 0.18
+              badge_w      = icon_size * 0.55
+              badge_h      = icon_size * 0.16
+              badge_x      = (s - badge_w) / 2
+              badge_y      = s - margin - badge_h - icon_size * 0.08
+              badge_rx     = badge_h / 2
+              font_size    = badge_h * 0.55
+              text_x       = s / 2
+              text_y       = badge_y + badge_h / 2
+              wf_x1        = s * 0.25
+              wf_x2        = s * 0.75
+              wf_cy        = s * 0.42
+              wf_stroke    = s * 0.02
+              border_r     = int(r * 0.5)
+              border_g     = int(g * 0.5)
+              border_b     = int(b * 0.5)
+
+              printf "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\">\n", size, size, size, size
+              print "  <defs><filter id=\"s\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\"><feDropShadow dx=\"0\" dy=\"1\" stdDeviation=\"2\" flood-color=\"rgba(0,0,0,0.6)\"/></filter></defs>"
+              printf "  <rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" rx=\"%g\" ry=\"%g\" fill=\"#2a2a2a\"/>\n", margin, margin, icon_size, icon_size, corner_r, corner_r
+              printf "  <rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" rx=\"%g\" ry=\"%g\" fill=\"rgba(%d,%d,%d,0.3)\"/>\n", margin, margin, icon_size, icon_size, corner_r, corner_r, r, g, b
+              printf "  <line x1=\"%g\" y1=\"%g\" x2=\"%g\" y2=\"%g\" stroke=\"rgba(255,255,255,0.15)\" stroke-width=\"%g\"/>\n", wf_x1, wf_cy, wf_x2, wf_cy, wf_stroke
+              printf "  <rect x=\"%g\" y=\"%g\" width=\"%g\" height=\"%g\" rx=\"%g\" ry=\"%g\" fill=\"rgba(%d,%d,%d,0.95)\" stroke=\"rgb(%d,%d,%d)\" stroke-width=\"1.5\" filter=\"url(#s)\"/>\n", badge_x, badge_y, badge_w, badge_h, badge_rx, badge_rx, r, g, b, border_r, border_g, border_b
+              printf "  <text x=\"%g\" y=\"%g\" font-family=\"system-ui,-apple-system,sans-serif\" font-weight=\"bold\" font-size=\"%g\" fill=\"white\" text-anchor=\"middle\" dominant-baseline=\"central\">%s</text>\n", text_x, text_y, font_size, badge
+              print "</svg>"
+            }' /dev/null
+          }
+
+          # Install icons for one rig at 48, 128, 256px
+          install_icons() {
+            local id=$1 r=$2 g=$3 b=$4 badge=$5
+            for size in 48 128 256; do
+              local dir="$HOME/.local/share/icons/hicolor/''${size}x''${size}/apps"
+              mkdir -p "$dir"
+              gen_icon_svg "$size" "$r" "$g" "$b" "$badge" \
+                | "$RSVG" -w "$size" -h "$size" - -o "$dir/$id.png"
+            done
+          }
+
           # Per-rig setup
           setup_rig() {
-            local id="$1"
-            local name="$2"
-            local rig_type="$3"
-            local comment="$4"
+            local id="$1" name="$2" rig_type="$3" comment="$4" r="$5" g="$6" b="$7" badge="$8"
 
             # launch.json — written at runtime so $HOME is expanded
             mkdir -p "$HOME/.config/fts/rigs/$id"
@@ -261,14 +327,17 @@
             # Rig wrapper binary
             ln -sf "$RIGS_PKG/bin/$id" "$HOME/.local/bin/$id"
 
-            # .desktop entry
+            # Icons (48, 128, 256px)
+            install_icons "$id" "$r" "$g" "$b" "$badge"
+
+            # .desktop entry — Icon= references the per-rig XDG icon name
             cat > "$HOME/.local/share/applications/$id.desktop" << DESKTOP
           [Desktop Entry]
           Type=Application
           Name=$name
           Comment=$comment
           Exec=$HOME/.local/bin/$id %F
-          Icon=reaper
+          Icon=$id
           Terminal=false
           Categories=AudioVideo;Audio;
           StartupWMClass=REAPER
@@ -280,13 +349,18 @@
 
           ${nixpkgs.lib.concatStringsSep "\n" (
             nixpkgs.lib.mapAttrsToList (_: rig: ''
-              setup_rig "${rig.id}" "${rig.name}" "${rig.rig_type}" "${rig.comment}"
+              setup_rig "${rig.id}" "${rig.name}" "${rig.rig_type}" "${rig.comment}" \
+                        "${toString rig.color.r}" "${toString rig.color.g}" "${toString rig.color.b}" \
+                        "${rig.badge}"
             '') predefinedRigs
           )}
 
-          # Refresh desktop database if available
+          # Refresh caches
+          if command -v gtk-update-icon-cache &>/dev/null; then
+            gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+          fi
           if command -v update-desktop-database &>/dev/null; then
-            update-desktop-database "$HOME/.local/share/applications"
+            update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
           fi
 
           echo ""
