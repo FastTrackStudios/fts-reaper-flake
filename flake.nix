@@ -238,19 +238,14 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            cat > "$FTS_REAPER/${rig.name}.desktop" << DESKTOP2
-          [Desktop Entry]
-          Type=Application
-          Name=${rig.name}
-          Comment=${rig.comment}
-          Exec=${rig.id} %F
-          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
-          Terminal=false
-          DESKTOP2
-            chmod +x "$FTS_REAPER/${rig.name}.desktop"
-            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon \
+            # Launcher script in Reaper folder (works in both Dolphin and Nautilus)
+            cat > "$FTS_REAPER/${rig.name}" << LAUNCHER
+          #!/usr/bin/env bash
+          exec ${rig.id} "\$@"
+          LAUNCHER
+            chmod +x "$FTS_REAPER/${rig.name}"
+            gio set "$FTS_REAPER/${rig.name}" metadata::custom-icon \
               "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
-            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::trusted true 2>/dev/null || true
           '') predefinedRigs)}
 
           echo "FTS REAPER setup complete"
