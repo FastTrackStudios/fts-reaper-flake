@@ -182,63 +182,11 @@
           set -euo pipefail
           FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
           FTS_DIR="$FTS_REAPER/FastTrackStudio"
-          ICONS="${self}/assets/icons"
           mkdir -p "$FTS_DIR"
 
           # Write single launch.json with all rig configs
           echo '${launchJsonContent}' | ${pkgs.gnused}/bin/sed "s|%FTS_REAPER%|$FTS_REAPER|g" \
             | ${pkgs.jq}/bin/jq . > "$FTS_DIR/launch.json"
-
-          # Icons into XDG hicolor
-          HICOLOR="$HOME/.local/share/icons/hicolor"
-          for size in 48 128 256; do
-            dir="$HICOLOR/''${size}x''${size}/apps"
-            mkdir -p "$dir"
-            for icon in "$ICONS/$size"/*.png; do
-              cp "$icon" "$dir/" 2>/dev/null || true
-            done
-          done
-
-          # Ensure index.theme for KDE
-          if [ ! -f "$HICOLOR/index.theme" ]; then
-            cat > "$HICOLOR/index.theme" << 'THEME'
-          [Icon Theme]
-          Name=Hicolor
-          Comment=Fallback icon theme
-          Hidden=true
-          Directories=48x48/apps,128x128/apps,256x256/apps
-          [48x48/apps]
-          Size=48
-          Context=Apps
-          Type=Threshold
-          [128x128/apps]
-          Size=128
-          Context=Apps
-          Type=Threshold
-          [256x256/apps]
-          Size=256
-          Context=Apps
-          Type=Threshold
-          THEME
-          fi
-
-          # Desktop entries (app launcher + local shortcuts in Reaper folder)
-          mkdir -p "$HOME/.local/share/applications"
-          ${nixpkgs.lib.concatStringsSep "\n" (nixpkgs.lib.mapAttrsToList (_: rig: ''
-            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << 'DESKTOP'
-          [Desktop Entry]
-          Type=Application
-          Name=${rig.name}
-          Comment=${rig.comment}
-          Exec=${rig.id} %F
-          Icon=${rig.id}
-          Terminal=false
-          Categories=AudioVideo;Audio;
-          StartupWMClass=REAPER
-          Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
-          DESKTOP
-
-          '') predefinedRigs)}
 
           echo "FTS REAPER setup complete"
           echo "  launch.json → $FTS_DIR/launch.json"
@@ -265,13 +213,32 @@
           exec "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@"
         '';
 
-        # Icon package — installs into the nix store so NixOS/KDE can find them
+        # Icons + desktop entries as a proper Nix package
+        # KDE finds these via /run/current-system/sw/share/ or the home profile
         fts-icons = pkgs.runCommand "fts-icons" {} ''
           for size in 48 128 256; do
             dir=$out/share/icons/hicolor/''${size}x''${size}/apps
             mkdir -p $dir
             cp ${self}/assets/icons/$size/*.png $dir/
           done
+
+          mkdir -p $out/share/applications
+          ${nixpkgs.lib.concatStringsSep "\n" (nixpkgs.lib.mapAttrsToList (_: rig:
+            let wrapper = mkRigWrapper rig; in ''
+              cat > $out/share/applications/${rig.id}.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=${rig.name}
+          Comment=${rig.comment}
+          Exec=${wrapper}/bin/${rig.id} %F
+          Icon=${rig.id}
+          Terminal=false
+          Categories=AudioVideo;Audio;
+          StartupWMClass=REAPER
+          Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
+          EOF
+            ''
+          ) predefinedRigs)}
         '';
 
         # Single package containing all rig wrappers + reaper-launcher + icons
