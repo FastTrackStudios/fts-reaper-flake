@@ -22,7 +22,7 @@
       nixpkgs,
       flake-utils,
       reaper-flake,
-    }:
+    } @ inputs:
     let
       # ── mkFtsPackages ─────────────────────────────────────────────────────
       # Wraps reaper-flake.lib.mkReaperPackages and adds fts-* aliases so
@@ -46,6 +46,11 @@
     {
       inherit presets;
       lib.mkFtsPackages = mkFtsPackages;
+
+      # home-manager module — declarative FTS REAPER rig management.
+      # See modules/home.nix for options and usage.
+      homeManagerModules.default = ./modules/home.nix;
+      homeManagerModules.fts-reaper = ./modules/home.nix;
     }
     // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
       system:
