@@ -181,12 +181,13 @@
         fts-setup-standalone = pkgs.writeShellScriptBin "fts-setup" ''
           set -euo pipefail
           FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
+          FTS_DIR="$FTS_REAPER/FastTrackStudio"
           ICONS="${self}/assets/icons"
-          mkdir -p "$FTS_REAPER"
+          mkdir -p "$FTS_DIR"
 
           # Write single launch.json with all rig configs
           echo '${launchJsonContent}' | ${pkgs.gnused}/bin/sed "s|%FTS_REAPER%|$FTS_REAPER|g" \
-            | ${pkgs.jq}/bin/jq . > "$FTS_REAPER/launch.json"
+            | ${pkgs.jq}/bin/jq . > "$FTS_DIR/launch.json"
 
           # Icons into XDG hicolor
           HICOLOR="$HOME/.local/share/icons/hicolor"
@@ -237,7 +238,7 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            cat > "$FTS_REAPER/${rig.name}.desktop" << DESKTOP2
+            cat > "$FTS_DIR/${rig.name}.desktop" << DESKTOP2
           [Desktop Entry]
           Type=Application
           Name=${rig.name}
@@ -246,13 +247,13 @@
           Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
           Terminal=false
           DESKTOP2
-            chmod +x "$FTS_REAPER/${rig.name}.desktop"
-            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon \
+            chmod +x "$FTS_DIR/${rig.name}.desktop"
+            gio set "$FTS_DIR/${rig.name}.desktop" metadata::custom-icon \
               "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
           '') predefinedRigs)}
 
           echo "FTS REAPER setup complete"
-          echo "  launch.json → $FTS_REAPER/launch.json"
+          echo "  launch.json → $FTS_DIR/launch.json"
           echo "  Rigs: ${nixpkgs.lib.concatStringsSep ", " (nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs)}"
         '';
 
@@ -261,8 +262,7 @@
         # execs reaper-launcher with --config launch.json --rig <id>.
         mkRigWrapper = rig: pkgs.writeShellScriptBin rig.id ''
           set -euo pipefail
-          FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
-          CONFIG="$FTS_REAPER/launch.json"
+          CONFIG="$HOME/.fasttrackstudio/Reaper/FastTrackStudio/launch.json"
 
           # --setup: just run setup without launching REAPER
           if [ "''${1:-}" = "--setup" ]; then
