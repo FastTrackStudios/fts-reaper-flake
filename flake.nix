@@ -6,6 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     reaper-flake.url = "github:FastTrackStudios/reaper-flake";
     crane.url = "github:ipetkov/crane";
+    wrappers.url = "github:Lassulus/wrappers";
 
     # daw source only — not evaluated as a flake to avoid circular dependency
     # (daw uses fts-reaper-flake; we only need it to build reaper-launcher).
@@ -31,12 +32,11 @@
       flake-utils,
       reaper-flake,
       crane,
+      wrappers,
       daw,
     } @ inputs:
     let
       # ── mkFtsPackages ─────────────────────────────────────────────────────
-      # Wraps reaper-flake.lib.mkReaperPackages and adds fts-* aliases so
-      # consumers don't need to know the underlying reaper-flake names.
       mkFtsPackages =
         { pkgs, cfg }:
         let
@@ -48,17 +48,49 @@
           fts-gui = base.reaper-gui;
         };
 
-      # Re-export reaper-flake presets so consumers can reference them directly.
       presets = reaper-flake.presets;
 
       ftsReaperConfig = "$HOME/.fasttrackstudio/Reaper";
+
+      # ── Predefined rig definitions ─────────────────────────────────────
+      # Colors and badges match icon_gen::rig_appearance in reaper-launcher.
+      predefinedRigs = {
+        keys = {
+          id = "fts-keys";
+          name = "FTS Keys";
+          comment = "REAPER signal rig for keyboard instruments";
+          rig_type = "keys";
+        };
+        drums = {
+          id = "fts-drums";
+          name = "FTS Drums";
+          comment = "REAPER signal rig for drums and percussion";
+          rig_type = "drums";
+        };
+        bass = {
+          id = "fts-bass";
+          name = "FTS Bass";
+          comment = "REAPER signal rig for bass";
+          rig_type = "bass";
+        };
+        guitar = {
+          id = "fts-guitar";
+          name = "FTS Guitar";
+          comment = "REAPER signal rig for guitar";
+          rig_type = "guitar";
+        };
+        vocals = {
+          id = "fts-vocals";
+          name = "FTS Vocals";
+          comment = "REAPER signal rig for vocals";
+          rig_type = "vocals";
+        };
+      };
     in
     {
       inherit presets;
       lib.mkFtsPackages = mkFtsPackages;
 
-      # home-manager module — declarative FTS REAPER rig management.
-      # See modules/home.nix for options and usage.
       homeManagerModules.default = ./modules/home.nix;
       homeManagerModules.fts-reaper = ./modules/home.nix;
     }
@@ -81,10 +113,9 @@
           };
         };
 
+        wlib = wrappers.lib;
+
         # ── reaper-launcher ───────────────────────────────────────────────
-        # Builds just the reaper-launcher binary from the daw workspace source.
-        # reaper-launcher only depends on libc, serde, serde_json — pure Rust,
-        # no native deps — so this builds cleanly without the rest of the workspace.
         craneLib = crane.mkLib pkgs;
 
         reaper-launcher =
@@ -102,10 +133,33 @@
           in
           craneLib.buildPackage (commonArgs // { inherit cargoArtifacts; });
 
+        # ── Per-rig wrapper scripts ────────────────────────────────────────
+        # Each rig gets its own binary (fts-keys, fts-drums, etc.) that calls
+        # reaper-launcher with the rig's launch.json path.
+        # $HOME in args is preserved unescaped by escapeShellArgWithEnv —
+        # the shell expands it at runtime.
+        mkRigWrapper =
+          rig:
+          wlib.wrapPackage {
+            inherit pkgs;
+            package = reaper-launcher;
+            exePath = "${reaper-launcher}/bin/reaper-launcher";
+            binName = rig.id;
+            args = [
+              "--config"
+              "$HOME/.config/fts/rigs/${rig.id}/launch.json"
+              "$@"
+            ];
+          };
+
+        # Single package containing all rig wrappers
+        fts-rigs = pkgs.symlinkJoin {
+          name = "fts-rigs";
+          paths = nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs;
+        };
+
         # ── Audio production library set ──────────────────────────────────
-        # Full set of native libs needed for CLAP/VST plugins and DAW tools.
         audioProductionLibs = with pkgs; [
-          # X11 / windowing (baseview, raw-window-handle, x11 crate)
           libx11
           libxi
           libxext
@@ -120,51 +174,159 @@
           libxcb
           libxscrnsaver
           libxkbcommon
-
-          # GPU / Vulkan (wgpu backend)
           vulkan-loader
           vulkan-headers
           vulkan-tools
           libGL
           mesa
-
-          # GTK / GLib (file dialogs, clipboard, tray)
           gtk3
           glib
           gdk-pixbuf
           pango
           cairo
           atk
-
-          # Wayland (optional secondary backend)
           wayland
           wayland-protocols
-
-          # Font rendering
           fontconfig
           freetype
-
-          # Audio
           alsa-lib
           pipewire.jack
           rubberband
-
-          # C/C++ bindgen (signalsmith-stretch and other C wrappers)
           llvmPackages.libclang
-
-          # Misc
           dbus
           zlib
           stdenv.cc.cc.lib
         ];
+
+        # ── Setup script ──────────────────────────────────────────────────
+        # nix run .#setup — installs the full FTS audio production environment:
+        #   - creates ~/.fasttrackstudio/Reaper/
+        #   - writes launch.json for each predefined rig
+        #   - symlinks rig wrappers and reaper-launcher to ~/.local/bin/
+        #   - installs .desktop entries to ~/.local/share/applications/
+        setup-script = pkgs.writeShellScriptBin "fts-setup" ''
+          set -euo pipefail
+
+          REAPER_EXE="${devPkgs.reaper}/bin/reaper"
+          REAPER_CONFIG="$HOME/.fasttrackstudio/Reaper"
+          LAUNCHER="${reaper-launcher}/bin/reaper-launcher"
+          RIGS_PKG="${fts-rigs}"
+
+          echo ""
+          echo "  FTS Audio Production Setup"
+          echo "  ──────────────────────────"
+
+          # Directories
+          mkdir -p "$REAPER_CONFIG"
+          mkdir -p "$HOME/.config/fts/rigs"
+          mkdir -p "$HOME/.local/bin"
+          mkdir -p "$HOME/.local/share/applications"
+
+          # Seed a minimal reaper.ini if none exists
+          if [ ! -f "$REAPER_CONFIG/reaper.ini" ]; then
+            cat > "$REAPER_CONFIG/reaper.ini" << 'INI'
+          [reaper]
+          audiodriver=2
+          undomaxmem=0
+          INI
+            echo "  reaper.ini  → $REAPER_CONFIG/reaper.ini"
+          fi
+
+          # Install reaper-launcher
+          ln -sf "$LAUNCHER" "$HOME/.local/bin/reaper-launcher"
+          echo "  reaper-launcher → $HOME/.local/bin/reaper-launcher"
+
+          # Per-rig setup
+          setup_rig() {
+            local id="$1"
+            local name="$2"
+            local rig_type="$3"
+            local comment="$4"
+
+            # launch.json — written at runtime so $HOME is expanded
+            mkdir -p "$HOME/.config/fts/rigs/$id"
+            cat > "$HOME/.config/fts/rigs/$id/launch.json" << JSON
+          {
+            "role": "signal",
+            "rig_type": "$rig_type",
+            "reaper_executable": "$REAPER_EXE",
+            "resources_dir": "$REAPER_CONFIG",
+            "ini_path": "$REAPER_CONFIG/reaper.ini",
+            "ini_overrides": { "undo_max_mem": 0 },
+            "restore_ini_after_launch": false,
+            "reaper_args": ["-newinst", "-nosplash", "-ignoreerrors"]
+          }
+          JSON
+
+            # Rig wrapper binary
+            ln -sf "$RIGS_PKG/bin/$id" "$HOME/.local/bin/$id"
+
+            # .desktop entry
+            cat > "$HOME/.local/share/applications/$id.desktop" << DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=$name
+          Comment=$comment
+          Exec=$HOME/.local/bin/$id %F
+          Icon=reaper
+          Terminal=false
+          Categories=AudioVideo;Audio;
+          StartupWMClass=REAPER
+          Keywords=reaper;daw;signal;$rig_type;fasttrackstudio;
+          DESKTOP
+
+            echo "  $id → installed"
+          }
+
+          ${nixpkgs.lib.concatStringsSep "\n" (
+            nixpkgs.lib.mapAttrsToList (_: rig: ''
+              setup_rig "${rig.id}" "${rig.name}" "${rig.rig_type}" "${rig.comment}"
+            '') predefinedRigs
+          )}
+
+          # Refresh desktop database if available
+          if command -v update-desktop-database &>/dev/null; then
+            update-desktop-database "$HOME/.local/share/applications"
+          fi
+
+          echo ""
+          echo "  Done. REAPER: $REAPER_EXE"
+          echo ""
+          echo "  Rigs installed:"
+          ${nixpkgs.lib.concatStringsSep "\n" (
+            nixpkgs.lib.mapAttrsToList (_: rig: ''
+              echo "    ${rig.id}"
+            '') predefinedRigs
+          )}
+          echo ""
+          echo "  Run any rig with: ${nixpkgs.lib.concatStringsSep ", " (
+            nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs
+          )}"
+          echo ""
+        '';
       in
       {
         packages = {
-          default = devPkgs.fts-test;
+          default = setup-script;
+          inherit
+            reaper-launcher
+            fts-rigs
+            ;
           fts-test = devPkgs.fts-test;
           fts-gui = devPkgs.fts-gui;
           reaper-fhs = devPkgs.reaper-fhs;
-          inherit reaper-launcher;
+          setup = setup-script;
+        };
+
+        apps = {
+          default = {
+            type = "app";
+            program = "${setup-script}/bin/fts-setup";
+          };
+          setup = {
+            type = "app";
+            program = "${setup-script}/bin/fts-setup";
+          };
         };
 
         devShells.default = pkgs.mkShell {
@@ -174,12 +336,12 @@
               devPkgs.fts-gui
               devPkgs.reaper-fhs
               reaper-launcher
+              fts-rigs
               pkgs.pkg-config
               pkgs.openssl
             ]
             ++ audioProductionLibs;
 
-          # Static store-path env vars set directly
           FTS_REAPER_EXECUTABLE = "${devPkgs.reaper}/bin/reaper";
           FTS_REAPER_RESOURCES = "${devPkgs.reaper}/opt/REAPER";
           LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
@@ -199,6 +361,7 @@
             echo "  fts-test [cmd]  — headless REAPER FHS env"
             echo "  fts-gui         — launch REAPER with GUI"
             echo "  reaper-launcher — rig launcher binary"
+            echo "  fts-keys / fts-drums / fts-bass / fts-guitar / fts-vocals"
             echo ""
             echo "  REAPER: ${devPkgs.reaper}/bin/reaper"
             echo ""
