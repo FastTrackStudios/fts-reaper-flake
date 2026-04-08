@@ -225,13 +225,13 @@
           # Desktop entries (app launcher + local shortcuts in Reaper folder)
           mkdir -p "$HOME/.local/share/applications"
           ${nixpkgs.lib.concatStringsSep "\n" (nixpkgs.lib.mapAttrsToList (_: rig: ''
-            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << DESKTOP
+            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << 'DESKTOP'
           [Desktop Entry]
           Type=Application
           Name=${rig.name}
           Comment=${rig.comment}
           Exec=${rig.id} %F
-          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
+          Icon=${rig.id}
           Terminal=false
           Categories=AudioVideo;Audio;
           StartupWMClass=REAPER
@@ -265,10 +265,19 @@
           exec "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@"
         '';
 
-        # Single package containing all rig wrappers + reaper-launcher
+        # Icon package — installs into the nix store so NixOS/KDE can find them
+        fts-icons = pkgs.runCommand "fts-icons" {} ''
+          for size in 48 128 256; do
+            dir=$out/share/icons/hicolor/''${size}x''${size}/apps
+            mkdir -p $dir
+            cp ${self}/assets/icons/$size/*.png $dir/
+          done
+        '';
+
+        # Single package containing all rig wrappers + reaper-launcher + icons
         fts-rigs = pkgs.symlinkJoin {
           name = "fts-rigs";
-          paths = (nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs) ++ [ reaper-launcher fts-setup-standalone ];
+          paths = (nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs) ++ [ reaper-launcher fts-setup-standalone fts-icons ];
         };
 
         # ── Audio production library set ──────────────────────────────────
@@ -318,6 +327,7 @@
           inherit
             reaper-launcher
             fts-rigs
+            fts-icons
             ;
           fts-test = devPkgs.fts-test;
           fts-gui = devPkgs.fts-gui;
