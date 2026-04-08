@@ -143,12 +143,18 @@
 
         reaper-launcher =
           let
-            src = craneLib.cleanCargoSource daw;
+            src = nixpkgs.lib.cleanSourceWith {
+              src = daw;
+              filter = path: type:
+                (craneLib.filterCargoSources path type)
+                || (builtins.match ".*\\.icns$" path != null)
+                || (builtins.match ".*\\.ttf$" path != null);
+            };
             commonArgs = {
               inherit src;
               pname = "reaper-launcher";
               version = "0.1.0";
-              cargoExtraArgs = "-p reaper-launcher --features icon-gen";
+              cargoExtraArgs = "-p reaper-launcher";
               strictDeps = true;
               doCheck = false;
             };
@@ -182,10 +188,39 @@
           EOF
           ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
 
-          # Install icons + desktop entry on first run
-          ICON_MARKER="$CONFIG_DIR/.icons-installed"
+          # Install pre-built icons + desktop entry on first run
+          ICON_MARKER="$CONFIG_DIR/.setup-done"
           if [ ! -f "$ICON_MARKER" ]; then
-            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}"${if rig.noTint or false then " --no-tint" else ""} 2>/dev/null || true
+            ICONS="${self}/assets/icons"
+            for size in 48 128 256; do
+              dir="$HOME/.local/share/icons/hicolor/''${size}x''${size}/apps"
+              mkdir -p "$dir"
+              cp "$ICONS/$size/${rig.id}.png" "$dir/${rig.id}.png" 2>/dev/null || true
+            done
+
+            # Ensure index.theme for KDE
+            HICOLOR="$HOME/.local/share/icons/hicolor"
+            if [ ! -f "$HICOLOR/index.theme" ]; then
+              cat > "$HICOLOR/index.theme" << 'THEME'
+          [Icon Theme]
+          Name=Hicolor
+          Comment=Fallback icon theme
+          Hidden=true
+          Directories=48x48/apps,128x128/apps,256x256/apps
+          [48x48/apps]
+          Size=48
+          Context=Apps
+          Type=Threshold
+          [128x128/apps]
+          Size=128
+          Context=Apps
+          Type=Threshold
+          [256x256/apps]
+          Size=256
+          Context=Apps
+          Type=Threshold
+          THEME
+            fi
 
             # Desktop entry
             mkdir -p "$HOME/.local/share/applications"
