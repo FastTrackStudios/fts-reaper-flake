@@ -169,12 +169,16 @@
         mkRigWrapper = rig: pkgs.writeShellScriptBin rig.id ''
           set -euo pipefail
           LAUNCHER="${reaper-launcher}/bin/reaper-launcher"
-          CONFIG_DIR="$HOME/.config/fts/rigs/${rig.id}"
-          CONFIG="$CONFIG_DIR/launch.json"
+          FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
+          RIG_DIR="$FTS_REAPER/${rig.id}"
+          CONFIG="$RIG_DIR/launch.json"
+          ICONS="${self}/assets/icons"
+          SELF="$(readlink -f "$0")"
 
-          # Generate launch.json (always refreshed to pick up new store paths)
-          mkdir -p "$CONFIG_DIR"
-          cat > "$CONFIG" << 'EOF'
+          setup() {
+            # launch.json
+            mkdir -p "$RIG_DIR"
+            cat > "$CONFIG" << 'EOF'
           {
             "role": "signal",
             "rig_type": "${rig.rig_type}",
@@ -186,12 +190,9 @@
             "reaper_args": ["-newinst", "-nosplash", "-ignoreerrors"]
           }
           EOF
-          ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
+            ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
 
-          # Install pre-built icons + desktop entry on first run
-          ICON_MARKER="$CONFIG_DIR/.setup-done"
-          if [ ! -f "$ICON_MARKER" ]; then
-            ICONS="${self}/assets/icons"
+            # Icons into XDG hicolor
             for size in 48 128 256; do
               dir="$HOME/.local/share/icons/hicolor/''${size}x''${size}/apps"
               mkdir -p "$dir"
@@ -222,14 +223,14 @@
           THEME
             fi
 
-            # Desktop entry
+            # App launcher desktop entry (uses XDG icon name)
             mkdir -p "$HOME/.local/share/applications"
             cat > "$HOME/.local/share/applications/${rig.id}.desktop" << DESKTOP
           [Desktop Entry]
           Type=Application
           Name=${rig.name}
           Comment=${rig.comment}
-          Exec=$(readlink -f "$0") %F
+          Exec=$SELF %F
           Icon=${rig.id}
           Terminal=false
           Categories=AudioVideo;Audio;
@@ -237,8 +238,30 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            touch "$ICON_MARKER"
+            # Local shortcut in Reaper folder (uses absolute icon path)
+            cat > "$FTS_REAPER/${rig.id}.desktop" << DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=${rig.name}
+          Comment=${rig.comment}
+          Exec=$SELF %F
+          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
+          Terminal=false
+          DESKTOP
+            chmod +x "$FTS_REAPER/${rig.id}.desktop"
+
+            touch "$RIG_DIR/.setup-done"
+          }
+
+          # --setup: install icons/desktop entries without launching REAPER
+          if [ "''${1:-}" = "--setup" ]; then
+            setup
+            echo "${rig.id}: setup complete"
+            exit 0
           fi
+
+          # Auto-setup on first run
+          [ -f "$RIG_DIR/.setup-done" ] || setup
 
           exec "$LAUNCHER" --config "$CONFIG" "$@"
         '';
