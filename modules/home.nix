@@ -109,9 +109,9 @@ in
       type = lib.types.package;
       description = ''
         The REAPER package to use. The executable at ''${package}/bin/reaper
-        is embedded in each rig''s launch.json.
+        is embedded in each rig's launch.json.
 
-        Use reaper-flake''s packages.reaper for a properly patched build, or
+        Use reaper-flake's packages.reaper for a properly patched build, or
         pkgs.reaper from nixpkgs (requires allowUnfree).
       '';
     };
@@ -128,7 +128,7 @@ in
       type = lib.types.str;
       default = "${config.home.homeDirectory}/.fasttrackstudio/Reaper";
       description = ''
-        REAPER config and resources directory. Written into each rig''s
+        REAPER config and resources directory. Written into each rig's
         launch.json as resources_dir and the ini_path base.
       '';
     };
