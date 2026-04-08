@@ -225,13 +225,13 @@
           # Desktop entries (app launcher + local shortcuts in Reaper folder)
           mkdir -p "$HOME/.local/share/applications"
           ${nixpkgs.lib.concatStringsSep "\n" (nixpkgs.lib.mapAttrsToList (_: rig: ''
-            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << 'DESKTOP'
+            cat > "$HOME/.local/share/applications/${rig.id}.desktop" << DESKTOP
           [Desktop Entry]
           Type=Application
           Name=${rig.name}
           Comment=${rig.comment}
           Exec=${rig.id} %F
-          Icon=${rig.id}
+          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
           Terminal=false
           Categories=AudioVideo;Audio;
           StartupWMClass=REAPER
