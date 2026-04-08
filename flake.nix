@@ -238,8 +238,16 @@
           Keywords=reaper;daw;${rig.rig_type};fasttrackstudio;
           DESKTOP
 
-            # Symlink in Reaper folder for quick access from file manager
-            ln -sf "$SELF" "$FTS_REAPER/${rig.name}"
+            # Desktop shortcut in Reaper folder (Dolphin shows Icon= and runs Exec=)
+            cat > "$FTS_REAPER/${rig.name}.desktop" << DESKTOP
+          [Desktop Entry]
+          Type=Application
+          Name=${rig.name}
+          Comment=${rig.comment}
+          Exec=$SELF %F
+          Icon=$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png
+          Terminal=false
+          DESKTOP
 
             touch "$RIG_DIR/.setup-done"
           }
