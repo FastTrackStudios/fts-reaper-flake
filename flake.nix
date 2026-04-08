@@ -170,14 +170,13 @@
           set -euo pipefail
           LAUNCHER="${reaper-launcher}/bin/reaper-launcher"
           FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
-          RIG_DIR="$FTS_REAPER/${rig.id}"
-          CONFIG="$RIG_DIR/launch.json"
+          CONFIG="$FTS_REAPER/${rig.id}.json"
           ICONS="${self}/assets/icons"
           SELF="$(readlink -f "$0")"
 
           setup() {
             # launch.json
-            mkdir -p "$RIG_DIR"
+            mkdir -p "$FTS_REAPER"
             cat > "$CONFIG" << 'EOF'
           {
             "role": "signal",
@@ -252,7 +251,7 @@
             # Set custom icon metadata for Nautilus/GNOME
             gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
 
-            touch "$RIG_DIR/.setup-done"
+            touch "$FTS_REAPER/.${rig.id}-setup-done"
           }
 
           # --setup: install icons/desktop entries without launching REAPER
@@ -263,7 +262,7 @@
           fi
 
           # Auto-setup on first run
-          [ -f "$RIG_DIR/.setup-done" ] || setup
+          [ -f "$FTS_REAPER/.${rig.id}-setup-done" ] || setup
 
           exec "$LAUNCHER" --config "$CONFIG" "$@"
         '';
