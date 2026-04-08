@@ -107,8 +107,8 @@
       inherit presets;
       lib.mkFtsPackages = mkFtsPackages;
 
-      homeManagerModules.default = ./modules/home.nix;
-      homeManagerModules.fts-reaper = ./modules/home.nix;
+      homeManagerModules.default = import ./modules/home.nix { perSystemPackages = self.packages; };
+      homeManagerModules.fts-reaper = import ./modules/home.nix { perSystemPackages = self.packages; };
     }
     // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (
       system:
