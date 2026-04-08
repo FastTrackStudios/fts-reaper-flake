@@ -58,7 +58,7 @@
           comment = "FTS REAPER — Main DAW Instance";
           rig_type = "reaper";
           badge = "FTS";
-          color = { r = 139; g = 92; b = 246; };   # 0x8b5cf6 purple
+          color = { r = 221; g = 221; b = 221; };   # 0xdddddd white/light gray
           noTint = true;
         };
         keys = {
