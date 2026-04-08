@@ -52,6 +52,15 @@
       # ── Predefined rig definitions ─────────────────────────────────────
       # Colors and badges must match icon_gen::rig_appearance in reaper-launcher.
       predefinedRigs = {
+        reaper = {
+          id = "fts-reaper";
+          name = "FTS REAPER";
+          comment = "FTS REAPER — Main DAW Instance";
+          rig_type = "reaper";
+          badge = "FTS";
+          color = { r = 139; g = 92; b = 246; };   # 0x8b5cf6 purple
+          noTint = true;
+        };
         keys = {
           id = "fts-keys";
           name = "FTS Keys";
@@ -176,7 +185,7 @@
           # Install icons on first run (REAPER base + colored badge)
           ICON_MARKER="$CONFIG_DIR/.icons-installed"
           if [ ! -f "$ICON_MARKER" ]; then
-            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}" 2>/dev/null \
+            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}"${if rig.noTint or false then " --no-tint" else ""} 2>/dev/null \
               && touch "$ICON_MARKER" || true
           fi
 
