@@ -250,6 +250,7 @@
             chmod +x "$FTS_REAPER/${rig.name}.desktop"
             gio set "$FTS_REAPER/${rig.name}.desktop" metadata::custom-icon \
               "file://$HOME/.local/share/icons/hicolor/128x128/apps/${rig.id}.png" 2>/dev/null || true
+            gio set "$FTS_REAPER/${rig.name}.desktop" metadata::trusted true 2>/dev/null || true
           '') predefinedRigs)}
 
           echo "FTS REAPER setup complete"
