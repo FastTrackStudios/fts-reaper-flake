@@ -139,7 +139,7 @@
               inherit src;
               pname = "reaper-launcher";
               version = "0.1.0";
-              cargoExtraArgs = "-p reaper-launcher";
+              cargoExtraArgs = "-p reaper-launcher --features icon-gen";
               strictDeps = true;
               doCheck = false;
             };
@@ -153,8 +153,11 @@
         # No home-manager or setup step required — nix run .#fts-keys just works.
         mkRigWrapper = rig: pkgs.writeShellScriptBin rig.id ''
           set -euo pipefail
+          LAUNCHER="${reaper-launcher}/bin/reaper-launcher"
           CONFIG_DIR="$HOME/.config/fts/rigs/${rig.id}"
           CONFIG="$CONFIG_DIR/launch.json"
+
+          # Generate launch.json (always refreshed to pick up new store paths)
           mkdir -p "$CONFIG_DIR"
           cat > "$CONFIG" << 'EOF'
           {
@@ -169,7 +172,15 @@
           }
           EOF
           ${pkgs.gnused}/bin/sed -i "s|PLACEHOLDER_HOME|$HOME|g" "$CONFIG"
-          exec "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@"
+
+          # Install icons on first run (REAPER base + colored badge)
+          ICON_MARKER="$CONFIG_DIR/.icons-installed"
+          if [ ! -f "$ICON_MARKER" ]; then
+            "$LAUNCHER" install-icons --id "${rig.id}" --rig-type "${rig.rig_type}" 2>/dev/null \
+              && touch "$ICON_MARKER" || true
+          fi
+
+          exec "$LAUNCHER" --config "$CONFIG" "$@"
         '';
 
         # Single package containing all rig wrappers + reaper-launcher
