@@ -245,8 +245,8 @@
             "${fts-dev-setup}/bin/fts-dev-setup"
           fi
 
-          # Launch and tag window for KDE
-          "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
+          # Launch through FHS wrapper for native libs (libGL, GDK, etc.)
+          "${devPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
           REAPER_PID=$!
           for i in $(seq 1 20); do
             WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
@@ -276,9 +276,8 @@
             "${fts-setup-standalone}/bin/fts-setup"
           fi
 
-          # Launch REAPER in background, then tag its XWayland window with
-          # _KDE_NET_WM_DESKTOP_FILE so KDE shows the correct per-rig icon.
-          "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
+          # Launch through FHS wrapper for native libs (libGL, GDK, etc.)
+          "${prodPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
           REAPER_PID=$!
 
           # Wait for REAPER's window to appear (up to 10s)
