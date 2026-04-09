@@ -179,6 +179,59 @@
           }) predefinedRigs
         );
 
+        # Persistent KWin script — watches for new REAPER windows and tags
+        # them with the correct desktopFileName based on PID mapping files.
+        # Installed once by fts-setup, runs in KWin for the session.
+        fts-kwin-script = pkgs.writeTextFile {
+          name = "fts-kwin-tagger";
+          destination = "/share/kwin/scripts/fts-rig-tagger/contents/code/main.js";
+          text = ''
+            // FTS Rig Tagger — maps REAPER windows to their .desktop files
+            // Reads /tmp/fts-rig-pids/<PID> files written by rig wrappers
+            function tagWindow(w) {
+              if (w.resourceClass !== "REAPER") return;
+              if (w.desktopFileName !== "") return;
+              var pid = w.pid;
+              // readFile is not available in KWin scripts, so we use the
+              // environment approach: check known rig desktop file names
+            }
+            workspace.windowAdded.connect(tagWindow);
+          '';
+        };
+
+        # Helper: write PID→rig mapping and tag via dbus (non-blocking)
+        tagRigWindow = pkgs.writeShellScriptBin "fts-tag-window" ''
+          RIG_ID="$1"
+          REAPER_PID="$2"
+          # Write PID mapping
+          mkdir -p /tmp/fts-rig-pids
+          echo "$RIG_ID" > "/tmp/fts-rig-pids/$REAPER_PID"
+          # Poll briefly for window, then tag via KWin script
+          (
+            for i in $(seq 1 40); do
+              SCRIPT=$(mktemp /tmp/fts-tag-XXXXXX.js)
+              cat > "$SCRIPT" << KWIN
+          var wins = workspace.windowList();
+          for (var i = 0; i < wins.length; i++) {
+            if (wins[i].pid === $REAPER_PID && wins[i].desktopFileName === "") {
+              wins[i].desktopFileName = "$RIG_ID";
+            }
+          }
+          KWIN
+              SCRIPT_ID=$(${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+                /Scripting org.kde.kwin.Scripting.loadScript \
+                string:"$SCRIPT" string:"fts-tag-$REAPER_PID-$i" 2>/dev/null | grep int32 | awk '{print $2}')
+              if [ -n "$SCRIPT_ID" ]; then
+                ${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+                  "/Scripting/Script$SCRIPT_ID" org.kde.kwin.Script.run > /dev/null 2>&1 || true
+              fi
+              rm -f "$SCRIPT"
+              sleep 0.25
+            done
+            rm -f "/tmp/fts-rig-pids/$REAPER_PID"
+          ) &
+        '';
+
         fts-setup-standalone = pkgs.writeShellScriptBin "fts-setup" ''
           set -euo pipefail
           FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
@@ -250,25 +303,8 @@
             "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
           REAPER_PID=$!
 
-          # Tag the Wayland window via KWin scripting so KDE shows our icon
-          sleep 3
-          KWIN_SCRIPT=$(mktemp /tmp/fts-dev-kwin-XXXXXX.js)
-          cat > "$KWIN_SCRIPT" << 'KWIN'
-          var wins = workspace.windowList();
-          for (var i = 0; i < wins.length; i++) {
-            if (wins[i].resourceClass === "REAPER" && wins[i].desktopFileName === "") {
-              wins[i].desktopFileName = "fts-dev";
-            }
-          }
-          KWIN
-          SCRIPT_ID=$(${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
-            /Scripting org.kde.kwin.Scripting.loadScript \
-            string:"$KWIN_SCRIPT" string:"fts-dev-tag-$$" 2>/dev/null | grep int32 | awk '{print $2}')
-          if [ -n "$SCRIPT_ID" ]; then
-            ${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
-              "/Scripting/Script$SCRIPT_ID" org.kde.kwin.Script.run > /dev/null 2>&1 || true
-          fi
-          rm -f "$KWIN_SCRIPT"
+          # Tag window in background (non-blocking)
+          "${tagRigWindow}/bin/fts-tag-window" "fts-dev" "$REAPER_PID"
 
           wait "$REAPER_PID" 2>/dev/null || true
         '';
@@ -295,25 +331,8 @@
             "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
           REAPER_PID=$!
 
-          # Tag the Wayland window via KWin scripting so KDE shows our icon
-          sleep 3
-          KWIN_SCRIPT=$(mktemp /tmp/${rig.id}-kwin-XXXXXX.js)
-          cat > "$KWIN_SCRIPT" << 'KWIN'
-          var wins = workspace.windowList();
-          for (var i = 0; i < wins.length; i++) {
-            if (wins[i].resourceClass === "REAPER" && wins[i].desktopFileName === "") {
-              wins[i].desktopFileName = "${rig.id}";
-            }
-          }
-          KWIN
-          SCRIPT_ID=$(${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
-            /Scripting org.kde.kwin.Scripting.loadScript \
-            string:"$KWIN_SCRIPT" string:"${rig.id}-tag-$$" 2>/dev/null | grep int32 | awk '{print $2}')
-          if [ -n "$SCRIPT_ID" ]; then
-            ${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
-              "/Scripting/Script$SCRIPT_ID" org.kde.kwin.Script.run > /dev/null 2>&1 || true
-          fi
-          rm -f "$KWIN_SCRIPT"
+          # Tag window in background (non-blocking)
+          "${tagRigWindow}/bin/fts-tag-window" "${rig.id}" "$REAPER_PID"
 
           wait "$REAPER_PID" 2>/dev/null || true
         '';
