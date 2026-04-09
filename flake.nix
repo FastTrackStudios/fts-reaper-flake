@@ -182,14 +182,22 @@
           set -euo pipefail
           FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
           FTS_DIR="$FTS_REAPER/FastTrackStudio"
-          mkdir -p "$FTS_DIR"
+          mkdir -p "$FTS_DIR" "$FTS_REAPER/UserPlugins" "$FTS_REAPER/Scripts"
 
           # Write single launch.json with all rig configs
           echo '${launchJsonContent}' | ${pkgs.gnused}/bin/sed "s|%FTS_REAPER%|$FTS_REAPER|g" \
             | ${pkgs.jq}/bin/jq . > "$FTS_DIR/launch.json"
 
+          # Symlink SWS and ReaPack extensions into UserPlugins
+          ln -sf "${prodPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$FTS_REAPER/UserPlugins/"
+          ln -sf "${prodPkgs.sws}/Scripts/sws_python.py" "$FTS_REAPER/Scripts/"
+          ln -sf "${prodPkgs.sws}/Scripts/sws_python64.py" "$FTS_REAPER/Scripts/"
+          ln -sf "${prodPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$FTS_REAPER/UserPlugins/"
+
           echo "FTS REAPER setup complete"
           echo "  launch.json → $FTS_DIR/launch.json"
+          echo "  SWS → $FTS_REAPER/UserPlugins/reaper_sws-x86_64.so"
+          echo "  ReaPack → $FTS_REAPER/UserPlugins/reaper_reapack-x86_64.so"
           echo "  Rigs: ${nixpkgs.lib.concatStringsSep ", " (nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs)}"
         '';
 
