@@ -245,20 +245,31 @@
             "${fts-dev-setup}/bin/fts-dev-setup"
           fi
 
-          # Launch through FHS wrapper for native libs (libGL, GDK, etc.)
-          # reaper-launcher runs OUTSIDE FHS (it's a native binary), but it
-          # exec's REAPER which needs to run INSIDE the FHS env.
-          REAPER_FHS="${devPkgs.reaper-fhs}/bin/reaper-env"
-          FTS_REAPER_FHS="$REAPER_FHS" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
+          # Launch REAPER through FHS wrapper
+          FTS_REAPER_FHS="${devPkgs.reaper-fhs}/bin/reaper-env" \
+            "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
           REAPER_PID=$!
-          for i in $(seq 1 20); do
-            WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
-            sleep 0.5
-          done
-          if [ -n "''${WID:-}" ]; then
-            ${pkgs.xorg.xprop}/bin/xprop -id "$WID" -f _KDE_NET_WM_DESKTOP_FILE 8u \
-              -set _KDE_NET_WM_DESKTOP_FILE "fts-dev" 2>/dev/null || true
+
+          # Tag the Wayland window via KWin scripting so KDE shows our icon
+          sleep 3
+          KWIN_SCRIPT=$(mktemp /tmp/fts-dev-kwin-XXXXXX.js)
+          cat > "$KWIN_SCRIPT" << 'KWIN'
+          var wins = workspace.windowList();
+          for (var i = 0; i < wins.length; i++) {
+            if (wins[i].resourceClass === "REAPER" && wins[i].desktopFileName === "") {
+              wins[i].desktopFileName = "fts-dev";
+            }
+          }
+          KWIN
+          SCRIPT_ID=$(${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+            /Scripting org.kde.kwin.Scripting.loadScript \
+            string:"$KWIN_SCRIPT" string:"fts-dev-tag-$$" 2>/dev/null | grep int32 | awk '{print $2}')
+          if [ -n "$SCRIPT_ID" ]; then
+            ${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+              "/Scripting/Script$SCRIPT_ID" org.kde.kwin.Script.run > /dev/null 2>&1 || true
           fi
+          rm -f "$KWIN_SCRIPT"
+
           wait "$REAPER_PID" 2>/dev/null || true
         '';
 
@@ -279,23 +290,31 @@
             "${fts-setup-standalone}/bin/fts-setup"
           fi
 
-          # reaper-launcher runs natively; it exec's REAPER through the FHS wrapper
-          FTS_REAPER_FHS="${prodPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
+          # Launch REAPER through FHS wrapper
+          FTS_REAPER_FHS="${prodPkgs.reaper-fhs}/bin/reaper-env" \
+            "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
           REAPER_PID=$!
 
-          # Wait for REAPER's window to appear (up to 10s)
-          for i in $(seq 1 20); do
-            WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
-            sleep 0.5
-          done
-
-          # Tag the window so KDE matches it to our .desktop file
-          if [ -n "''${WID:-}" ]; then
-            ${pkgs.xorg.xprop}/bin/xprop -id "$WID" -f _KDE_NET_WM_DESKTOP_FILE 8u \
-              -set _KDE_NET_WM_DESKTOP_FILE "${rig.id}" 2>/dev/null || true
+          # Tag the Wayland window via KWin scripting so KDE shows our icon
+          sleep 3
+          KWIN_SCRIPT=$(mktemp /tmp/${rig.id}-kwin-XXXXXX.js)
+          cat > "$KWIN_SCRIPT" << 'KWIN'
+          var wins = workspace.windowList();
+          for (var i = 0; i < wins.length; i++) {
+            if (wins[i].resourceClass === "REAPER" && wins[i].desktopFileName === "") {
+              wins[i].desktopFileName = "${rig.id}";
+            }
+          }
+          KWIN
+          SCRIPT_ID=$(${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+            /Scripting org.kde.kwin.Scripting.loadScript \
+            string:"$KWIN_SCRIPT" string:"${rig.id}-tag-$$" 2>/dev/null | grep int32 | awk '{print $2}')
+          if [ -n "$SCRIPT_ID" ]; then
+            ${pkgs.dbus}/bin/dbus-send --session --dest=org.kde.KWin --print-reply \
+              "/Scripting/Script$SCRIPT_ID" org.kde.kwin.Script.run > /dev/null 2>&1 || true
           fi
+          rm -f "$KWIN_SCRIPT"
 
-          # Wait for REAPER to exit
           wait "$REAPER_PID" 2>/dev/null || true
         '';
 
