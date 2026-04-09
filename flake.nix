@@ -246,7 +246,10 @@
           fi
 
           # Launch through FHS wrapper for native libs (libGL, GDK, etc.)
-          "${devPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
+          # reaper-launcher runs OUTSIDE FHS (it's a native binary), but it
+          # exec's REAPER which needs to run INSIDE the FHS env.
+          REAPER_FHS="${devPkgs.reaper-fhs}/bin/reaper-env"
+          FTS_REAPER_FHS="$REAPER_FHS" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
           REAPER_PID=$!
           for i in $(seq 1 20); do
             WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
@@ -276,8 +279,8 @@
             "${fts-setup-standalone}/bin/fts-setup"
           fi
 
-          # Launch through FHS wrapper for native libs (libGL, GDK, etc.)
-          "${prodPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
+          # reaper-launcher runs natively; it exec's REAPER through the FHS wrapper
+          FTS_REAPER_FHS="${prodPkgs.reaper-fhs}/bin/reaper-env" "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" --rig "${rig.id}" "$@" &
           REAPER_PID=$!
 
           # Wait for REAPER's window to appear (up to 10s)
