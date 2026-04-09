@@ -267,7 +267,7 @@
           {
             "role": "testing",
             "rig_type": "dev",
-            "reaper_executable": "${devPkgs.reaper}/bin/reaper",
+            "reaper_executable": "${prodPkgs.reaper}/bin/reaper",
             "resources_dir": "$FTS_DEV",
             "ini_path": "$FTS_DEV/reaper.ini",
             "ini_overrides": { "undo_max_mem": 0 },
@@ -277,10 +277,10 @@
           JSON
 
           # Extensions
-          ln -sf "${devPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$FTS_DEV/UserPlugins/"
-          ln -sf "${devPkgs.sws}/Scripts/sws_python.py" "$FTS_DEV/Scripts/"
-          ln -sf "${devPkgs.sws}/Scripts/sws_python64.py" "$FTS_DEV/Scripts/"
-          ln -sf "${devPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$FTS_DEV/UserPlugins/"
+          ln -sf "${prodPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$FTS_DEV/UserPlugins/"
+          ln -sf "${prodPkgs.sws}/Scripts/sws_python.py" "$FTS_DEV/Scripts/"
+          ln -sf "${prodPkgs.sws}/Scripts/sws_python64.py" "$FTS_DEV/Scripts/"
+          ln -sf "${prodPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$FTS_DEV/UserPlugins/"
 
           echo "FTS-DEV setup complete → $FTS_DEV"
         '';
@@ -299,7 +299,7 @@
           fi
 
           # Launch REAPER through FHS wrapper
-          FTS_REAPER_FHS="${devPkgs.reaper-fhs}/bin/reaper-env" \
+          FTS_REAPER_FHS="${prodPkgs.reaper-fhs}/bin/reaper-env" \
             "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
           REAPER_PID=$!
 
