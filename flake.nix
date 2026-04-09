@@ -201,6 +201,63 @@
           echo "  Rigs: ${nixpkgs.lib.concatStringsSep ", " (nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs)}"
         '';
 
+        # ── FTS-DEV: isolated development/testing REAPER instance ─────────
+        # Completely separate from production rigs — own config dir, own
+        # launch.json, own extensions. For plugin development and testing.
+        fts-dev-setup = pkgs.writeShellScriptBin "fts-dev-setup" ''
+          set -euo pipefail
+          FTS_DEV="$HOME/.fts-dev"
+          mkdir -p "$FTS_DEV/UserPlugins" "$FTS_DEV/Scripts"
+
+          cat > "$FTS_DEV/launch.json" << JSON
+          {
+            "role": "testing",
+            "rig_type": "dev",
+            "reaper_executable": "${devPkgs.reaper}/bin/reaper",
+            "resources_dir": "$FTS_DEV",
+            "ini_path": "$FTS_DEV/reaper.ini",
+            "ini_overrides": { "undo_max_mem": 0 },
+            "restore_ini_after_launch": false,
+            "reaper_args": ["-newinst", "-nosplash", "-ignoreerrors"]
+          }
+          JSON
+
+          # Extensions
+          ln -sf "${devPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$FTS_DEV/UserPlugins/"
+          ln -sf "${devPkgs.sws}/Scripts/sws_python.py" "$FTS_DEV/Scripts/"
+          ln -sf "${devPkgs.sws}/Scripts/sws_python64.py" "$FTS_DEV/Scripts/"
+          ln -sf "${devPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$FTS_DEV/UserPlugins/"
+
+          echo "FTS-DEV setup complete → $FTS_DEV"
+        '';
+
+        fts-dev = pkgs.writeShellScriptBin "fts-dev" ''
+          set -euo pipefail
+          FTS_DEV="$HOME/.fts-dev"
+          CONFIG="$FTS_DEV/launch.json"
+
+          if [ "''${1:-}" = "--setup" ]; then
+            exec "${fts-dev-setup}/bin/fts-dev-setup"
+          fi
+
+          if [ ! -f "$CONFIG" ]; then
+            "${fts-dev-setup}/bin/fts-dev-setup"
+          fi
+
+          # Launch and tag window for KDE
+          "${reaper-launcher}/bin/reaper-launcher" --config "$CONFIG" "$@" &
+          REAPER_PID=$!
+          for i in $(seq 1 20); do
+            WID=$(${pkgs.xdotool}/bin/xdotool search --pid "$REAPER_PID" 2>/dev/null | head -1) && break
+            sleep 0.5
+          done
+          if [ -n "''${WID:-}" ]; then
+            ${pkgs.xorg.xprop}/bin/xprop -id "$WID" -f _KDE_NET_WM_DESKTOP_FILE 8u \
+              -set _KDE_NET_WM_DESKTOP_FILE "fts-dev" 2>/dev/null || true
+          fi
+          wait "$REAPER_PID" 2>/dev/null || true
+        '';
+
         # ── Per-rig wrappers ──────────────────────────────────────────────
         # Each rig is a thin script that ensures setup is done, then
         # execs reaper-launcher with --config launch.json --rig <id>.
@@ -265,12 +322,26 @@
           EOF
             ''
           ) predefinedRigs)}
+
+          # FTS-DEV desktop entry
+          cat > $out/share/applications/fts-dev.desktop << 'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=FTS DEV
+          Comment=FTS Development REAPER — isolated testing instance
+          Exec=${fts-dev}/bin/fts-dev %F
+          Icon=fts-dev
+          Terminal=false
+          Categories=AudioVideo;Audio;Development;
+          StartupWMClass=fts-dev
+          Keywords=reaper;daw;dev;testing;fasttrackstudio;
+          EOF
         '';
 
         # Single package containing all rig wrappers + reaper-launcher + icons
         fts-rigs = pkgs.symlinkJoin {
           name = "fts-rigs";
-          paths = (nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs) ++ [ reaper-launcher fts-setup-standalone fts-icons ];
+          paths = (nixpkgs.lib.mapAttrsToList (_: mkRigWrapper) predefinedRigs) ++ [ reaper-launcher fts-setup-standalone fts-dev fts-icons ];
         };
 
         # ── Audio production library set ──────────────────────────────────
