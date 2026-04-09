@@ -119,6 +119,7 @@
             pkg:
             builtins.elem (nixpkgs.lib.getName pkg) [
               "reaper"
+              "reaper-headless"
             ];
         };
 
