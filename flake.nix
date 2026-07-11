@@ -6,8 +6,13 @@
     flake-utils.url = "github:numtide/flake-utils";
     reaper-flake.url = "github:FastTrackStudios/reaper-flake";
     crane.url = "github:ipetkov/crane";
-    # daw source only — not evaluated as a flake to avoid circular dependency
-    # (daw uses fts-reaper-flake; we only need it to build reaper-launcher).
+    # daw source only — not evaluated as a flake; we only need it to build
+    # reaper-launcher. NOTE: reaper-launcher's canonical source now lives in
+    # the monorepo (FastTrackStudio/features/reaper/reaper-launcher, same
+    # code) — but crane cannot vendor the monorepo's dep tree (dead
+    # [patch] git URLs), so we keep building from the old daw pin until the
+    # launcher is published some other way. The pinned rev already supports
+    # every rig_type we use (reaper / session→TRACKS / dev).
     daw = {
       url = "github:FastTrackStudios/daw";
       flake = false;
@@ -47,59 +52,37 @@
 
       presets = reaper-flake.presets;
 
-      ftsReaperConfig = "$HOME/.fasttrackstudio/Reaper";
+      ftsReaperConfig = "$HOME/fasttrackstudio";
 
       # ── Predefined rig definitions ─────────────────────────────────────
-      # Colors and badges must match icon_gen::rig_appearance in reaper-launcher.
+      # THE three REAPER options are fts-reaper, fts-tracks, and fts-dev
+      # (fts-dev is its own wrapper below). Instrument signal rigs
+      # (guitar/keys/drums/bass/vocals) are NOT REAPER instances anymore —
+      # they come from the signal engine (`fasttrackstudio --engine`).
+      # Colors and badges must match icon_gen::rig_appearance in
+      # reaper-launcher. `resources` may use %FTS_REAPER% (the real
+      # install, ~/fasttrackstudio) or %HOME%.
       predefinedRigs = {
         reaper = {
           id = "fts-reaper";
           name = "FTS REAPER";
-          comment = "FTS REAPER — Main DAW Instance";
+          comment = "FTS REAPER — main DAW instance for recording";
           rig_type = "reaper";
+          role = "session";
+          resources = "%FTS_REAPER%";
           badge = "FTS";
           color = { r = 221; g = 221; b = 221; };   # 0xdddddd white/light gray
           noTint = true;
         };
-        keys = {
-          id = "fts-keys";
-          name = "FTS Keys";
-          comment = "REAPER Signal Rig for Keyboard Instruments";
-          rig_type = "keys";
-          badge = "KEYS";
-          color = { r = 34; g = 197; b = 94; };    # 0x22c55e green
-        };
-        drums = {
-          id = "fts-drums";
-          name = "FTS Drums";
-          comment = "REAPER Signal Rig for Drums and Percussion";
-          rig_type = "drums";
-          badge = "DRUMS";
-          color = { r = 239; g = 68; b = 68; };    # 0xef4444 red
-        };
-        bass = {
-          id = "fts-bass";
-          name = "FTS Bass";
-          comment = "REAPER Signal Rig for Bass";
-          rig_type = "bass";
-          badge = "BASS";
-          color = { r = 234; g = 179; b = 8; };    # 0xeab308 yellow
-        };
-        guitar = {
-          id = "fts-guitar";
-          name = "FTS Guitar";
-          comment = "REAPER Signal Rig for Guitar";
-          rig_type = "guitar";
-          badge = "GUITAR";
-          color = { r = 59; g = 130; b = 246; };   # 0x3b82f6 blue
-        };
-        vocals = {
-          id = "fts-vocals";
-          name = "FTS Vocals";
-          comment = "REAPER Signal Rig for Vocals";
-          rig_type = "vocals";
-          badge = "VOCALS";
-          color = { r = 236; g = 72; b = 153; };   # 0xec4899 pink
+        tracks = {
+          id = "fts-tracks";
+          name = "FTS Tracks";
+          comment = "FTS Tracks — live tracks playback instance";
+          rig_type = "session";
+          role = "tracks";
+          resources = "%HOME%/fts-tracks";
+          badge = "TRACKS";
+          color = { r = 102; g = 158; b = 230; };   # 0x669ee6 blue
         };
       };
     in
@@ -168,11 +151,11 @@
         # desktop entries. Run once via `fts-setup` or any rig's --setup flag.
         launchJsonContent = builtins.toJSON (
           nixpkgs.lib.mapAttrs' (_: rig: nixpkgs.lib.nameValuePair rig.id {
-            role = "signal";
+            role = rig.role;
             rig_type = rig.rig_type;
             reaper_executable = "${prodPkgs.reaper}/bin/reaper";
-            resources_dir = "%FTS_REAPER%";
-            ini_path = "%FTS_REAPER%/reaper.ini";
+            resources_dir = rig.resources;
+            ini_path = "${rig.resources}/reaper.ini";
             ini_overrides = { undo_max_mem = 0; };
             restore_ini_after_launch = false;
             reaper_args = [ "-newinst" "-nosplash" "-ignoreerrors" ];
@@ -234,25 +217,30 @@
 
         fts-setup-standalone = pkgs.writeShellScriptBin "fts-setup" ''
           set -euo pipefail
-          FTS_REAPER="$HOME/.fasttrackstudio/Reaper"
+          FTS_REAPER="$HOME/fasttrackstudio"
+          FTS_TRACKS="$HOME/fts-tracks"
           FTS_DIR="$FTS_REAPER/FastTrackStudio"
-          mkdir -p "$FTS_DIR" "$FTS_REAPER/UserPlugins" "$FTS_REAPER/Scripts"
+          mkdir -p "$FTS_DIR"
 
           # Write single launch.json with all rig configs
-          echo '${launchJsonContent}' | ${pkgs.gnused}/bin/sed "s|%FTS_REAPER%|$FTS_REAPER|g" \
+          echo '${launchJsonContent}' \
+            | ${pkgs.gnused}/bin/sed "s|%FTS_REAPER%|$FTS_REAPER|g; s|%HOME%|$HOME|g" \
             | ${pkgs.jq}/bin/jq . > "$FTS_DIR/launch.json"
 
-          # Symlink SWS and ReaPack extensions into UserPlugins
-          ln -sf "${prodPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$FTS_REAPER/UserPlugins/"
-          ln -sf "${prodPkgs.sws}/Scripts/sws_python.py" "$FTS_REAPER/Scripts/"
-          ln -sf "${prodPkgs.sws}/Scripts/sws_python64.py" "$FTS_REAPER/Scripts/"
-          ln -sf "${prodPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$FTS_REAPER/UserPlugins/"
+          # Symlink SWS and ReaPack extensions into each rig's UserPlugins
+          for RIG_DIR in "$FTS_REAPER" "$FTS_TRACKS"; do
+            mkdir -p "$RIG_DIR/UserPlugins" "$RIG_DIR/Scripts"
+            ln -sf "${prodPkgs.sws}/UserPlugins/reaper_sws-x86_64.so" "$RIG_DIR/UserPlugins/"
+            ln -sf "${prodPkgs.sws}/Scripts/sws_python.py" "$RIG_DIR/Scripts/"
+            ln -sf "${prodPkgs.sws}/Scripts/sws_python64.py" "$RIG_DIR/Scripts/"
+            ln -sf "${prodPkgs.reapack}/UserPlugins/reaper_reapack-x86_64.so" "$RIG_DIR/UserPlugins/"
+          done
 
           echo "FTS REAPER setup complete"
           echo "  launch.json → $FTS_DIR/launch.json"
-          echo "  SWS → $FTS_REAPER/UserPlugins/reaper_sws-x86_64.so"
-          echo "  ReaPack → $FTS_REAPER/UserPlugins/reaper_reapack-x86_64.so"
-          echo "  Rigs: ${nixpkgs.lib.concatStringsSep ", " (nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs)}"
+          echo "  fts-reaper  → $FTS_REAPER"
+          echo "  fts-tracks  → $FTS_TRACKS"
+          echo "  Rigs: ${nixpkgs.lib.concatStringsSep ", " (nixpkgs.lib.mapAttrsToList (_: rig: rig.id) predefinedRigs)} (+ fts-dev)"
         '';
 
         # ── FTS-DEV: isolated development/testing REAPER instance ─────────
@@ -260,7 +248,7 @@
         # launch.json, own extensions. For plugin development and testing.
         fts-dev-setup = pkgs.writeShellScriptBin "fts-dev-setup" ''
           set -euo pipefail
-          FTS_DEV="$HOME/.fts-dev"
+          FTS_DEV="$HOME/fts-dev"
           mkdir -p "$FTS_DEV/UserPlugins" "$FTS_DEV/Scripts"
 
           cat > "$FTS_DEV/launch.json" << JSON
@@ -287,7 +275,7 @@
 
         fts-dev = pkgs.writeShellScriptBin "fts-dev" ''
           set -euo pipefail
-          FTS_DEV="$HOME/.fts-dev"
+          FTS_DEV="$HOME/fts-dev"
           CONFIG="$FTS_DEV/launch.json"
 
           if [ "''${1:-}" = "--setup" ]; then
@@ -314,7 +302,7 @@
         # execs reaper-launcher with --config launch.json --rig <id>.
         mkRigWrapper = rig: pkgs.writeShellScriptBin rig.id ''
           set -euo pipefail
-          CONFIG="$HOME/.fasttrackstudio/Reaper/FastTrackStudio/launch.json"
+          CONFIG="$HOME/fasttrackstudio/FastTrackStudio/launch.json"
 
           # --setup: just run setup without launching REAPER
           if [ "''${1:-}" = "--setup" ]; then
@@ -481,14 +469,14 @@
           ];
 
           shellHook = ''
-            export FTS_REAPER_CONFIG="$HOME/.fasttrackstudio/Reaper"
+            export FTS_REAPER_CONFIG="$HOME/fasttrackstudio"
             echo ""
             echo "  fts-reaper-flake dev shell"
             echo "  ─────────────────────────────────────────"
             echo "  fts-test [cmd]  — headless REAPER FHS env"
             echo "  fts-gui         — launch REAPER with GUI"
             echo "  reaper-launcher — rig launcher binary"
-            echo "  fts-keys / fts-drums / fts-bass / fts-guitar / fts-vocals"
+            echo "  fts-reaper / fts-tracks / fts-dev"
             echo ""
             echo "  REAPER: ${devPkgs.reaper}/bin/reaper"
             echo ""
