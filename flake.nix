@@ -141,6 +141,18 @@
               cargoExtraArgs = "-p reaper-launcher";
               strictDeps = true;
               doCheck = false;
+              # daw's .cargo/config.toml links x86_64-linux with
+              # `-C link-arg=-fuse-ld=mold`, because linking its
+              # multi-hundred-MB desktop artifacts with ld.bfd is the
+              # serial tail of every build. It expects mold from daw's
+              # own devshell; crane builds in a sandbox that has no
+              # devshell, so without this every build script fails at
+              # `collect2: fatal error: cannot find 'ld'` — the first
+              # crate to link, not anything to do with reaper-launcher.
+              #
+              # Carrying mold here rather than stripping the flag keeps
+              # us building daw the way daw builds itself.
+              nativeBuildInputs = [ pkgs.mold ];
             };
             cargoArtifacts = craneLib.buildDepsOnly commonArgs;
           in
